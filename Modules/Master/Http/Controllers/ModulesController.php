@@ -1,5 +1,4 @@
 <?php
-
 namespace Modules\Master\Http\Controllers;
 
 use App\Models\Module;
@@ -8,14 +7,14 @@ use App\Models\ModuleFieldOption;
 use App\Models\ModulePermission;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\Agency;
 use App\Services\ModuleFileStructureService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Validator;
 use DB;
-use Illuminate\Support\Facades\File;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class ModulesController extends Controller
 {
@@ -61,19 +60,19 @@ class ModulesController extends Controller
             ->orderBy('order_number')
             ->get();
 
-        $allowed = $modules->filter(fn ($module) => $this->userCanAccessModule($module, $user));
+        $allowed = $modules->filter(fn($module) => $this->userCanAccessModule($module, $user));
 
-        $tree = [];
+        $tree  = [];
         $items = [];
 
         foreach ($allowed as $module) {
             $items[$module->id] = [
-                'id' => $module->id,
-                'menu_title' => $module->menu_title,
-                'slug' => $module->slug,
-                'icon' => $module->icon,
+                'id'          => $module->id,
+                'menu_title'  => $module->menu_title,
+                'slug'        => $module->slug,
+                'icon'        => $module->icon,
                 'parent_menu' => $module->parent_menu,
-                'children' => [],
+                'children'    => [],
             ];
         }
 
@@ -91,19 +90,19 @@ class ModulesController extends Controller
 
     private function userCanAccessModule(Module $module, $user)
     {
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
         // user_type restrictions
-        if (!empty($module->user_type) && $module->user_type !== 'all' && $module->user_type !== $user->user_type) {
+        if (! empty($module->user_type) && $module->user_type !== 'all' && $module->user_type !== $user->user_type) {
             return false;
         }
 
         $permissionName = $module->slug . '_access';
 
         // fallback: if no permission is defined for this module, allow it
-        if (!$user->hasPermissionTo($permissionName, 'sanctum')) {
+        if (! $user->hasPermissionTo($permissionName, 'sanctum')) {
             return false;
         }
 
@@ -113,7 +112,7 @@ class ModulesController extends Controller
     private function resolveTenantId(Request $request, array $moduleData)
     {
         // Respect explicit tenant_id from payload when provided.
-        if (!empty($moduleData['tenant_id'])) {
+        if (! empty($moduleData['tenant_id'])) {
             return $moduleData['tenant_id'];
         }
 
@@ -138,21 +137,21 @@ class ModulesController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'module.model_name' => 'required|string',
-            'module.slug' => 'required|string|unique:modules,slug',
-            'module.menu_title' => 'required|string',
-            'module.parent_menu' => 'nullable|integer',
-            'module.status' => 'boolean',
-            'module.icon' => 'nullable|string',
-            'module.user_type' => 'required|string',
-            'module.order_number' => 'integer',
-            'module.tenant_id' => 'nullable|string',
-            'module.actions' => 'nullable|array',
-            'module.created_by' => 'required|integer',
-            'module.assigned_admins' => 'array',
+            'module.model_name'        => 'required|string',
+            'module.slug'              => 'required|string|unique:modules,slug',
+            'module.menu_title'        => 'required|string',
+            'module.parent_menu'       => 'nullable|integer',
+            'module.status'            => 'boolean',
+            'module.icon'              => 'nullable|string',
+            'module.user_type'         => 'required|string',
+            'module.order_number'      => 'integer',
+            'module.tenant_id'         => 'nullable|string',
+            'module.actions'           => 'nullable|array',
+            'module.created_by'        => 'required|integer',
+            'module.assigned_admins'   => 'array',
             'module.assigned_agencies' => 'array',
-            'module.permissions' => 'array',
-            'fields' => 'array',
+            'module.permissions'       => 'array',
+            'fields'                   => 'array',
         ]);
 
         if ($validator->fails()) {
@@ -193,12 +192,12 @@ class ModulesController extends Controller
             ];
 
             foreach ($moduleData['permissions'] as $permId) {
-                $action = $permissionActions[$permId] ?? 'permission_' . $permId;
+                $action         = $permissionActions[$permId] ?? 'permission_' . $permId;
                 $permissionName = $module->slug . '_' . $action;
 
                 ModulePermission::create([
-                    'module_id' => $module->id,
-                    'user_id' => $moduleData['created_by'],
+                    'module_id'       => $module->id,
+                    'user_id'         => $moduleData['created_by'],
                     'permission_name' => $permissionName,
                 ]);
 
@@ -207,7 +206,7 @@ class ModulesController extends Controller
         }
 
         // Assign permissions based on user_type
-        if (!empty($allPermissions) && !empty($moduleData['user_type'])) {
+        if (! empty($allPermissions) && ! empty($moduleData['user_type'])) {
             $rolesToAssign = [];
             if (in_array($moduleData['user_type'], ['all', 'admin'])) {
                 $rolesToAssign[] = 'admin';
@@ -241,8 +240,9 @@ class ModulesController extends Controller
 
         // Generate files and create directory structure
         $this->generateModuleFiles($module);
-        ModuleFileStructureService::createModuleDirectories($module);
-        ModuleFileStructureService::createGitkeepFiles($module);
+        $fileService = new ModuleFileStructureService();
+        $fileService->createModuleDirectories($module->slug);
+        $fileService->createGitkeepFiles($module->slug);
 
         return response()->json(['success' => true, 'message' => 'Module created successfully']);
     }
@@ -274,11 +274,11 @@ class ModulesController extends Controller
         $module = Module::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
-            'module.id' => 'required|integer',
+            'module.id'         => 'required|integer',
             'module.model_name' => 'required|string',
-            'module.slug' => 'required|string|unique:modules,slug,' . $id,
+            'module.slug'       => 'required|string|unique:modules,slug,' . $id,
             // similar to store
-            'fields' => 'array',
+            'fields'            => 'array',
         ]);
 
         if ($validator->fails()) {
@@ -287,7 +287,7 @@ class ModulesController extends Controller
 
         DB::beginTransaction();
         try {
-            $moduleData = $request->input('module');
+            $moduleData       = $request->input('module');
             $resolvedTenantId = $this->resolveTenantId($request, $moduleData);
             if ($resolvedTenantId !== null) {
                 $moduleData['tenant_id'] = $resolvedTenantId;
@@ -313,11 +313,11 @@ class ModulesController extends Controller
                 ];
 
                 foreach ($moduleData['permissions'] as $permId) {
-                    $action = $permissionActions[$permId] ?? 'permission_' . $permId;
+                    $action         = $permissionActions[$permId] ?? 'permission_' . $permId;
                     $permissionName = $module->slug . '_' . $action;
                     ModulePermission::create([
-                        'module_id' => $module->id,
-                        'user_id' => $moduleData['created_by'],
+                        'module_id'       => $module->id,
+                        'user_id'         => $moduleData['created_by'],
                         'permission_name' => $permissionName,
                     ]);
                     $allPermissions[] = $permissionName;
@@ -325,7 +325,7 @@ class ModulesController extends Controller
             }
 
             // Assign permissions based on user_type
-            if (!empty($allPermissions) && !empty($moduleData['user_type'])) {
+            if (! empty($allPermissions) && ! empty($moduleData['user_type'])) {
                 $rolesToAssign = [];
                 if (in_array($moduleData['user_type'], ['all', 'admin'])) {
                     $rolesToAssign[] = 'admin';
@@ -342,7 +342,7 @@ class ModulesController extends Controller
                 }
             }
 
-            // Update fields - simplified, assume replace all
+                                         // Update fields - simplified, assume replace all
             $module->fields()->delete(); // This will cascade options
             if ($request->has('fields')) {
                 foreach ($request->input('fields') as $fieldData) {
@@ -365,9 +365,15 @@ class ModulesController extends Controller
 
     public function destroyWithFields($id)
     {
-        $module = Module::findOrFail($id);
-        
+        $module     = Module::findOrFail($id);
+        $moduleSlug = $module->slug;
+
         $module->delete(); // Cascades
+
+        // Clean up module directories
+        $fileService = new ModuleFileStructureService();
+        $fileService->deleteModuleDirectories($moduleSlug);
+
         return response()->json(['success' => true, 'message' => 'Module deleted successfully']);
     }
 
@@ -388,8 +394,8 @@ class ModulesController extends Controller
     public function reorderFields(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'fields' => 'required|array',
-            'fields.*.id' => 'required|integer',
+            'fields'                => 'required|array',
+            'fields.*.id'           => 'required|integer',
             'fields.*.order_number' => 'required|integer',
         ]);
 
@@ -421,10 +427,10 @@ class ModulesController extends Controller
     public function updateFieldOptions(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'module_id' => 'required|integer',
+            'module_id'       => 'required|integer',
             'module_field_id' => 'required|integer',
-            'column_type_id' => 'required|integer',
-            'options' => 'required|array',
+            'column_type_id'  => 'required|integer',
+            'options'         => 'required|array',
         ]);
 
         if ($validator->fails()) {
@@ -438,8 +444,8 @@ class ModulesController extends Controller
         foreach ($request->input('options') as $option) {
             ModuleFieldOption::create([
                 'module_field_id' => $request->input('module_field_id'),
-                'option_label' => $option['option_label'],
-                'option_value' => $option['option_value'],
+                'option_label'    => $option['option_label'],
+                'option_value'    => $option['option_value'],
             ]);
         }
 
@@ -547,400 +553,273 @@ class ModulesController extends Controller
     //     Artisan::call('migrate', ['--path' => "database/migrations/{$date}_create_{$slug}_table.php"]);
     // }
 
-    private function generateModuleFiles($module)
+private function generateModuleFiles($module)
+{
+    $modelName = $module->model_name;
+    $table = strtolower(Str::plural($module->slug)); // projects
+    $fk    = strtolower(Str::singular($module->slug)); // project
+    $baseTime = now();
+
+    $mainMigrations = [];
+    $fileMigrations = [];
+    $pivotMigrations = [];
+
+    /*
+    |----------------------------------------------------------------------
+    | MAIN TABLE
+    |----------------------------------------------------------------------
+    */
+    $mainDate = $baseTime->format('Y_m_d_His');
+    $migrationContent = <<<PHP
+<?php
+
+use Illuminate\\Database\\Migrations\\Migration;
+use Illuminate\\Database\\Schema\\Blueprint;
+use Illuminate\\Support\\Facades\\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
     {
-        $modelName = $module->model_name;
-        $slug = strtolower($module->slug);
-        $date = now()->format('Y_m_d_His');
+        if (!Schema::hasTable('{$table}')) {
+            Schema::create('{$table}', function (Blueprint \$table) {
+                \$table->id();
+PHP;
 
-        $migrationPaths = [];
+    foreach ($module->fields as $field) {
+        $type = $field->columnType->db_type;
+        $inputType = $field->columnType->input_type;
 
-        /*
-        |--------------------------------------------------------------------------
-        | MAIN TABLE MIGRATION
-        |--------------------------------------------------------------------------
-        */
-
-        $migrationContent = <<<PHP
-        <?php
-
-        use Illuminate\\Database\\Migrations\\Migration;
-        use Illuminate\\Database\\Schema\\Blueprint;
-        use Illuminate\\Support\\Facades\\Schema;
-
-        return new class extends Migration
-        {
-            public function up(): void
-            {
-                Schema::create('{$slug}', function (Blueprint \$table) {
-
-                    \$table->engine = 'InnoDB';
-
-                    \$table->id();
-
-        PHP;
-
-            foreach ($module->fields as $field) {
-
-                $fieldType = $field->columnType->db_type;
-                $inputType = $field->columnType->input_type;
-
-                /*
-                |--------------------------------------------------------------------------
-                | FILE / PHOTO FIELD
-                |--------------------------------------------------------------------------
-                */
-
-                if (in_array($inputType, ['file', 'photo'])) {
-
-                    if ($field->is_multiple) {
-
-                        $attachmentTable = $slug . '_' . $field->db_column;
-
-                        $attachDate = now()->addSecond()->format('Y_m_d_His');
-
-                        $attachmentMigration = <<<PHP
-        <?php
-
-        use Illuminate\\Database\\Migrations\\Migration;
-        use Illuminate\\Database\\Schema\\Blueprint;
-        use Illuminate\\Support\\Facades\\Schema;
-
-        return new class extends Migration
-        {
-            public function up(): void
-            {
-                Schema::create('{$attachmentTable}', function (Blueprint \$table) {
-
-                    \$table->engine = 'InnoDB';
-
-                    \$table->id();
-
-                    \$table->unsignedBigInteger('{$slug}_id');
-
-                    \$table->string('file_name');
-                    \$table->string('file_path');
-                    \$table->string('mime_type')->nullable();
-                    \$table->integer('file_size')->nullable();
-
-                    \$table->timestamps();
-
-                    \$table->foreign('{$slug}_id')
-                        ->references('id')
-                        ->on('{$slug}')
-                        ->onDelete('cascade');
-
-                });
-            }
-
-            public function down(): void
-            {
-                Schema::dropIfExists('{$attachmentTable}');
-            }
-        };
-        PHP;
-
-                        $path = database_path("migrations/{$attachDate}_create_{$attachmentTable}_table.php");
-
-                        File::put($path, $attachmentMigration);
-
-                        $migrationPaths[] =
-                            "database/migrations/{$attachDate}_create_{$attachmentTable}_table.php";
-
-                        continue;
-                    }
-
-                    $fieldType = 'string';
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | SINGLE RELATION
-                |--------------------------------------------------------------------------
-                */
-
-                if ($inputType === 'relation' && $field->model_name) {
-
-                    if ($field->is_multiple) {
-                        continue;
-                    }
-
-                    $relatedTable =
-                        \Illuminate\Support\Str::plural(
-                            strtolower($field->model_name)
-                        );
-
-                    $migrationContent .= <<<PHP
-
-                    \$table->unsignedBigInteger('{$field->db_column}')->nullable();
-
-                    \$table->foreign('{$field->db_column}')
-                        ->references('id')
-                        ->on('{$relatedTable}')
-                        ->onDelete('set null');
-
-        PHP;
-
-                    continue;
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | NORMAL FIELD
-                |--------------------------------------------------------------------------
-                */
-
-                $migrationContent .= <<<PHP
-
-                    \$table->{$fieldType}('{$field->db_column}')->nullable();
-
-        PHP;
-            }
-
+        // BELONGS TO RELATION
+        if (!$field->is_multiple && $field->model_name) {
+            $relatedTable = strtolower(Str::plural(Str::singular($field->model_name)));
             $migrationContent .= <<<PHP
 
-                    \$table->timestamps();
-
-                });
-
-            }
-
-            public function down(): void
-            {
-                Schema::dropIfExists('{$slug}');
-            }
-
-        };
-        PHP;
-
-            $mainMigrationPath =
-                database_path("migrations/{$date}_create_{$slug}_table.php");
-
-            File::put($mainMigrationPath, $migrationContent);
-
-            $migrationPaths[] =
-                "database/migrations/{$date}_create_{$slug}_table.php";
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | PIVOT TABLES (BELONGS TO MANY)
-            |--------------------------------------------------------------------------
-            */
-
-            foreach ($module->fields as $field) {
-
-                if (
-                    $field->columnType->input_type === 'relation'
-                    && $field->is_multiple
-                    && $field->model_name
-                ) {
-
-                    $relatedTable =
-                        \Illuminate\Support\Str::plural(
-                            strtolower($field->model_name)
-                        );
-
-                    $pivotTable =
-                        strtolower($slug) . '_' . $relatedTable;
-
-                    $pivotDate =
-                        now()->addSecond()->format('Y_m_d_His');
-
-                    $pivotMigration = <<<PHP
-        <?php
-
-        use Illuminate\\Database\\Migrations\\Migration;
-        use Illuminate\\Database\\Schema\\Blueprint;
-        use Illuminate\\Support\\Facades\\Schema;
-
-        return new class extends Migration
-        {
-            public function up(): void
-            {
-
-                Schema::create('{$pivotTable}', function (Blueprint \$table) {
-
-                    \$table->engine = 'InnoDB';
-
-                    \$table->id();
-
-                    \$table->unsignedBigInteger('{$slug}_id');
-
-                    \$table->unsignedBigInteger('{$relatedTable}_id');
-
-
-                    \$table->foreign('{$slug}_id')
-                        ->references('id')
-                        ->on('{$slug}')
-                        ->onDelete('cascade');
-
-
-                    \$table->foreign('{$relatedTable}_id')
-                        ->references('id')
-                        ->on('{$relatedTable}')
-                        ->onDelete('cascade');
-
-
-                    \$table->timestamps();
-
-                });
-
-            }
-
-            public function down(): void
-            {
-                Schema::dropIfExists('{$pivotTable}');
-            }
-
-        };
-        PHP;
-
-                    $path =
-                        database_path(
-                            "migrations/{$pivotDate}_create_{$pivotTable}_table.php"
-                        );
-
-                    File::put($path, $pivotMigration);
-
-                    $migrationPaths[] =
-                        "database/migrations/{$pivotDate}_create_{$pivotTable}_table.php";
-                }
-            }
-
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | CREATE UPLOAD FOLDERS
-            |--------------------------------------------------------------------------
-            */
-
-            foreach (
-                $module->fields->whereIn(
-                    'columnType.input_type',
-                    ['file', 'photo']
-                ) as $field
-            ) {
-
-                $folder =
-                    public_path(
-                        "{$slug}/{$field->db_column}"
-                    );
-
-                if (!file_exists($folder)) {
-
-                    mkdir($folder, 0755, true);
-                }
-            }
-
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | MODEL
-            |--------------------------------------------------------------------------
-            */
-
-            $modelContent = <<<PHP
-        <?php
-
-        namespace App\\Models;
-
-        use Illuminate\\Database\\Eloquent\\Factories\\HasFactory;
-        use Illuminate\\Database\\Eloquent\\Model;
-
-        class {$modelName} extends Model
-        {
-
-            use HasFactory;
-
-            protected \$table = '{$slug}';
-
-            protected \$fillable = [
-
-        PHP;
-
-            $fillable = [];
-
-            foreach ($module->fields as $field) {
-
-                $fillable[] =
-                    "        '{$field->db_column}'";
-            }
-
-            $modelContent .= implode(",\n", $fillable);
-
-            $modelContent .= <<<PHP
-
-            ];
-
-            protected \$casts = [
-
-        PHP;
-
-            $casts = [];
-
-            foreach ($module->fields as $field) {
-
-                if ($field->columnType->db_type === 'boolean') {
-
-                    $casts[] =
-                        "        '{$field->db_column}' => 'boolean'";
-                }
-            }
-
-            $modelContent .= implode(",\n", $casts);
-
-            $modelContent .= <<<PHP
-
-            ];
-
+                \$table->unsignedBigInteger('{$field->db_column}')->nullable();
+PHP;
+            continue;
         }
-        PHP;
 
-        File::put(
-            app_path("Models/{$modelName}.php"),
-            $modelContent
-        );
+        // NORMAL FIELD
+        if (!in_array($inputType, ['file','photo'])) {
+            $migrationContent .= <<<PHP
 
-        /*
-        |--------------------------------------------------------------------------
-        | RUN MIGRATIONS (ORDER SAFE)
-        |--------------------------------------------------------------------------
-        */
+                \$table->{$type}('{$field->db_column}')->nullable();
+PHP;
+        }
+    }
 
-        // run main table first
-        Artisan::call('migrate', [
+    $migrationContent .= <<<PHP
 
-            '--path' =>
-                "database/migrations/{$date}_create_{$slug}_table.php",
+                \$table->timestamps();
+            });
+        }
+    }
 
-            '--force' => true
+    public function down(): void
+    {
+        Schema::dropIfExists('{$table}');
+    }
+};
+PHP;
 
-        ]);
+    $mainPath = database_path("migrations/{$mainDate}_create_{$table}.php");
+    File::put($mainPath, $migrationContent);
+    $mainMigrations[] = "database/migrations/{$mainDate}_create_{$table}.php"; // relative path for Artisan
 
+    /*
+    |----------------------------------------------------------------------
+    | FILE / PHOTO TABLES
+    |----------------------------------------------------------------------
+    */
+    $i = 1;
+    foreach ($module->fields as $field) {
+        if (in_array($field->columnType->input_type, ['file','photo']) && $field->is_multiple) {
+            $attachTable = "{$table}_{$field->db_column}";
+            $date = $baseTime->copy()->addSeconds($i)->format('Y_m_d_His');
+            $i++;
 
-        // run attachments & pivot tables
-        foreach ($migrationPaths as $path) {
+            $migration = <<<PHP
+<?php
 
-            if (
-                $path ==
-                "database/migrations/{$date}_create_{$slug}_table.php"
-            ) {
+use Illuminate\\Database\\Migrations\\Migration;
+use Illuminate\\Database\\Schema\\Blueprint;
+use Illuminate\\Support\\Facades\\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (!Schema::hasTable('{$attachTable}')) {
+            Schema::create('{$attachTable}', function (Blueprint \$table) {
+                \$table->id();
+                \$table->unsignedBigInteger('{$fk}_id');
+                \$table->string('file_name');
+                \$table->string('file_path');
+                \$table->string('mime_type')->nullable();
+                \$table->integer('file_size')->nullable();
+                \$table->timestamps();
+
+                \$table->foreign('{$fk}_id')->references('id')->on('{$table}')->cascadeOnDelete();
+            });
+        }
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('{$attachTable}');
+    }
+};
+PHP;
+
+            $path = database_path("migrations/{$date}_create_{$attachTable}.php");
+            File::put($path, $migration);
+            $fileMigrations[] = "database/migrations/{$date}_create_{$attachTable}.php"; // relative path
+        }
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | PIVOT TABLES (Many to Many)
+    |----------------------------------------------------------------------
+    */
+    $createdPivots = [];
+    foreach ($module->fields as $field) {
+        if ($field->model_name && $field->is_multiple) {
+            $relatedModel = Str::singular($field->model_name);
+            $relatedTable = strtolower(Str::plural($relatedModel));
+            $relatedFk = strtolower(Str::singular($relatedModel));
+
+            $tables = [$table, $relatedTable];
+            sort($tables);
+            $pivot = implode('_', $tables); // feature_project
+
+            if (in_array($pivot, $createdPivots)) {
                 continue;
             }
+            $createdPivots[] = $pivot;
 
-            Artisan::call('migrate', [
+            $date = $baseTime->copy()->addSeconds($i)->format('Y_m_d_His');
+            $i++;
 
-                '--path' => $path,
+            $migration = <<<PHP
+<?php
 
-                '--force' => true
+use Illuminate\\Database\\Migrations\\Migration;
+use Illuminate\\Database\\Schema\\Blueprint;
+use Illuminate\\Support\\Facades\\Schema;
 
-            ]);
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (!Schema::hasTable('{$pivot}')) {
+            Schema::create('{$pivot}', function (Blueprint \$table) {
+                \$table->id();
+                \$table->unsignedBigInteger('{$fk}_id');
+                \$table->unsignedBigInteger('{$relatedFk}_id');
+                \$table->timestamps();
+
+                \$table->foreign('{$fk}_id')->references('id')->on('{$table}')->cascadeOnDelete();
+                \$table->foreign('{$relatedFk}_id')->references('id')->on('{$relatedTable}')->cascadeOnDelete();
+            });
         }
-
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('{$pivot}');
+    }
+};
+PHP;
+
+            $path = database_path("migrations/{$date}_create_{$pivot}.php");
+            File::put($path, $migration);
+            $pivotMigrations[] = "database/migrations/{$date}_create_{$pivot}.php"; // relative path
+        }
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | MODEL
+    |----------------------------------------------------------------------
+    */
+    $modelContent = <<<PHP
+<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class {$modelName} extends Model
+{
+    protected \$table = '{$table}';
+    protected \$fillable = [
+PHP;
+
+    foreach ($module->fields as $field) {
+        if (!in_array($field->columnType->input_type, ['file','photo'])) {
+            $modelContent .= "\n        '{$field->db_column}',";
+        }
+    }
+    $modelContent .= "\n    ];\n";
+
+    foreach ($module->fields as $field) {
+        if ($field->model_name) {
+            $relatedModel = Str::singular($field->model_name);
+            $relatedTable = strtolower(Str::plural($relatedModel));
+            $relatedFk = strtolower(Str::singular($relatedModel));
+
+            if ($field->is_multiple) {
+                $method = Str::plural(Str::camel($relatedFk));
+                $tables = [$table, $relatedTable];
+                sort($tables);
+                $pivot = implode('_', $tables);
+
+                $modelContent .= <<<PHP
+
+    public function {$method}()
+    {
+        return \$this->belongsToMany(
+            \\App\\Models\\{$relatedModel}::class,
+            '{$pivot}',
+            '{$fk}_id',
+            '{$relatedFk}_id'
+        )->withTimestamps();
+    }
+PHP;
+            } else {
+                $method = Str::camel($relatedFk);
+                $modelContent .= <<<PHP
+
+    public function {$method}()
+    {
+        return \$this->belongsTo(
+            \\App\\Models\\{$relatedModel}::class
+        );
+    }
+PHP;
+            }
+        }
+    }
+
+    $modelContent .= "\n}\n";
+
+    File::put(app_path("Models/{$modelName}.php"), $modelContent);
+
+    /*
+    |----------------------------------------------------------------------
+    | RUN MIGRATIONS IN CORRECT ORDER
+    |----------------------------------------------------------------------
+    */
+    foreach ($mainMigrations as $path) {
+        Artisan::call('migrate', ['--path' => $path, '--force' => true]);
+    }
+    foreach ($fileMigrations as $path) {
+        Artisan::call('migrate', ['--path' => $path, '--force' => true]);
+    }
+    foreach ($pivotMigrations as $path) {
+        Artisan::call('migrate', ['--path' => $path, '--force' => true]);
+    }
+}
 }

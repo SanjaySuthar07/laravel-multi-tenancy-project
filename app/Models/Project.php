@@ -2,27 +2,24 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Project extends Model
 {
-
-    use HasFactory;
-
-    protected $table = 'project';
-
+    protected $table = 'projects';
     protected $fillable = [
         'name',
         'summary',
-        'cover_image',
-        'files',
-        'photo',
-        'feature_ids'
+        'feature_ids',
     ];
 
-    protected $casts = [
-
-    ];
-
+    public function features()
+    {
+        return $this->belongsToMany(
+            \App\Models\Feature::class,
+            'features_projects',
+            'project_id',
+            'feature_id'
+        )->withTimestamps();
+    }
 }
